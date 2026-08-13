@@ -1,0 +1,592 @@
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Baloo+Da+2:wght@500;600;700;800&family=Hind+Siliguri:wght@400;500;600;700&display=swap');
+
+  :root{
+    --bg:#F4F5FC;
+    --ink:#1D1B31;
+    --ink-soft:#6B6684;
+    --card:#FFFFFF;
+    --line:#E9E7F5;
+    --indigo:#4C3FE0;
+    --violet:#8B5CF6;
+    --income:#12B76A;
+    --income-dark:#0E9F5D;
+    --income-soft:#E4F8EE;
+    --expense:#F0435C;
+    --expense-dark:#D42E48;
+    --expense-soft:#FDE9ED;
+    --amber:#FFB020;
+    --amber-dark:#E89A0C;
+  }
+  *{box-sizing:border-box;}
+  html,body{ margin:0; padding:0; }
+  body{ background:var(--bg); }
+  .app-shell{
+    font-family:'Hind Siliguri', sans-serif;
+    color:var(--ink);
+    max-width:440px;
+    margin:0 auto;
+    min-height:100vh;
+    background:var(--bg);
+    position:relative;
+    overflow-x:hidden;
+    display:flex;
+    flex-direction:column;
+  }
+  @media (prefers-reduced-motion: reduce){ *{ animation-duration:0.01ms !important; transition-duration:0.01ms !important; } }
+
+  .blobs{ position:absolute; top:0; left:0; right:0; height:230px; overflow:hidden; z-index:0; pointer-events:none; }
+  .blob{ position:absolute; border-radius:50%; filter:blur(40px); opacity:0.5; }
+  .blob.b1{ width:220px; height:220px; background:radial-gradient(circle,var(--violet),transparent 70%); top:-80px; left:-50px; animation:float1 9s ease-in-out infinite; }
+  .blob.b2{ width:180px; height:180px; background:radial-gradient(circle,var(--amber),transparent 70%); top:-40px; right:-60px; animation:float2 11s ease-in-out infinite; }
+  @keyframes float1{ 0%,100%{ transform:translate(0,0); } 50%{ transform:translate(20px,25px); } }
+  @keyframes float2{ 0%,100%{ transform:translate(0,0); } 50%{ transform:translate(-15px,20px); } }
+
+  .app-bar{ position:sticky; top:0; z-index:40; background:rgba(244,245,252,0.85); backdrop-filter:blur(10px); padding:14px 16px 10px; }
+  .app-bar-top{ display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:10px; }
+  .brand{ display:flex; align-items:center; gap:9px; }
+  .brand-badge{
+    width:36px; height:36px; border-radius:11px; flex:0 0 auto;
+    background:linear-gradient(135deg,var(--indigo),var(--violet));
+    display:flex; align-items:center; justify-content:center;
+    color:#fff; font-family:'Baloo Da 2',sans-serif; font-weight:700; font-size:17px;
+    box-shadow:0 6px 14px -6px rgba(76,63,224,0.6);
+  }
+  .brand h1{ font-family:'Baloo Da 2',sans-serif; font-size:17.5px; margin:0; }
+  .brand p{ margin:0; font-size:10.5px; color:var(--ink-soft); }
+  .month-picker{
+    border:1px solid var(--line); background:#fff; border-radius:999px; padding:7px 12px;
+    font-family:'Hind Siliguri',sans-serif; font-weight:600; font-size:12px; color:var(--ink); max-width:118px;
+  }
+  .chip-row{ display:flex; gap:7px; overflow-x:auto; padding-bottom:2px; scrollbar-width:none; }
+  .chip-row::-webkit-scrollbar{ display:none; }
+  .chip{
+    flex:0 0 auto; border:1px solid var(--line); background:#fff; color:var(--ink-soft);
+    padding:6px 13px; border-radius:999px; font-size:12px; font-weight:600; cursor:pointer;
+    transition:all 0.2s ease;
+  }
+  .chip.active{ background:linear-gradient(135deg,var(--indigo),var(--violet)); color:#fff; border-color:transparent; box-shadow:0 6px 14px -6px rgba(76,63,224,0.55); }
+
+  .screen{ position:relative; z-index:1; padding:6px 16px 100px; flex:1; }
+  .screen.hidden{ display:none; }
+
+  .hero-card{
+    background:linear-gradient(135deg,var(--indigo),var(--violet));
+    border-radius:20px; padding:20px 20px 18px; color:#fff; margin:10px 0 14px;
+    box-shadow:0 16px 30px -16px rgba(76,63,224,0.55);
+    animation:riseIn 0.5s ease both;
+  }
+  @keyframes riseIn{ from{ opacity:0; transform:translateY(14px); } to{ opacity:1; transform:translateY(0); } }
+  .hero-label{ font-size:12.5px; opacity:0.85; font-weight:600; }
+  .hero-value{ font-family:'Baloo Da 2',sans-serif; font-size:32px; font-weight:700; margin-top:4px; }
+  .ratio-track{ margin-top:14px; height:8px; border-radius:99px; background:rgba(255,255,255,0.25); overflow:hidden; }
+  .ratio-fill{ height:100%; background:#fff; border-radius:99px; transition:width 0.6s ease; }
+  .hero-sub{ margin-top:6px; font-size:11px; opacity:0.85; }
+
+  .quick-stats{ display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:16px; animation:riseIn 0.5s ease 0.05s both; }
+  .quick-stat{ border-radius:16px; padding:12px 14px; cursor:pointer; border:1px solid var(--line); background:#fff; transition:transform 0.15s ease; }
+  .quick-stat:active{ transform:scale(0.97); }
+  .quick-stat .qs-label{ font-size:11px; font-weight:600; color:var(--ink-soft); display:flex; align-items:center; gap:5px; }
+  .quick-stat .qs-value{ font-family:'Baloo Da 2',sans-serif; font-size:17px; font-weight:700; margin-top:4px; }
+  .quick-stat.income .qs-value{ color:var(--income-dark); }
+  .quick-stat.expense .qs-value{ color:var(--expense-dark); }
+  .qs-dot{ width:8px; height:8px; border-radius:50%; }
+  .quick-stat.income .qs-dot{ background:var(--income); }
+  .quick-stat.expense .qs-dot{ background:var(--expense); }
+
+  .segmented{ display:flex; background:#fff; border:1px solid var(--line); border-radius:999px; padding:3px; margin-bottom:12px; }
+  .seg-btn{ flex:1; border:none; background:transparent; padding:9px 0; border-radius:999px; font-weight:700; font-size:12.5px; color:var(--ink-soft); cursor:pointer; transition:all 0.2s ease; }
+  .seg-btn.active[data-seg="income"]{ background:var(--income); color:#fff; }
+  .seg-btn.active[data-seg="expense"]{ background:var(--expense); color:#fff; }
+
+  .entry-list{ display:flex; flex-direction:column; gap:8px; }
+  .entry-row{
+    display:flex; align-items:center; gap:9px; padding:11px 12px; border-radius:14px; background:#fff;
+    border:1px solid var(--line); font-size:13px; animation:riseIn 0.35s ease both;
+  }
+  .entry-row .e-date{ color:var(--ink-soft); font-size:11px; white-space:nowrap; }
+  .entry-row .e-desc{ flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .entry-row .e-amt{ font-weight:700; white-space:nowrap; }
+  #entryList[data-seg="income"] .e-amt{ color:var(--income-dark); }
+  #entryList[data-seg="expense"] .e-amt{ color:var(--expense-dark); }
+  .del-btn{ border:none; background:none; color:#c3bfd6; cursor:pointer; font-size:14px; padding:2px 3px; }
+  .del-btn:hover{ color:var(--expense); }
+  .empty-note{ text-align:center; color:#aca6c4; font-size:12.5px; padding:26px 0; font-style:italic; }
+
+  /* yearly view */
+  .year-card{ background:var(--card); border-radius:18px; padding:16px; margin-top:10px; border:1px solid var(--line); animation:riseIn 0.4s ease both; }
+  .year-card h2{ font-family:'Baloo Da 2',sans-serif; font-size:15.5px; margin:0 0 10px; }
+  .legend{ display:flex; gap:14px; margin-bottom:10px; font-size:11px; color:var(--ink-soft); }
+  .legend span{ display:inline-flex; align-items:center; gap:5px; }
+  .legend i{ width:9px; height:9px; border-radius:3px; display:inline-block; }
+  .legend .li-inc{ background:var(--income); }
+  .legend .li-exp{ background:var(--expense); }
+  .chart{ display:flex; align-items:flex-end; gap:10px; height:140px; padding:0 2px 6px; border-bottom:1px solid var(--line); overflow-x:auto; }
+  .chart-col{ display:flex; flex-direction:column; align-items:center; gap:4px; min-width:34px; }
+  .bars{ display:flex; align-items:flex-end; gap:3px; height:112px; }
+  .bar{ width:10px; border-radius:4px 4px 0 0; transition:height 0.5s ease; }
+  .bar.inc{ background:linear-gradient(180deg,var(--income),var(--income-dark)); }
+  .bar.exp{ background:linear-gradient(180deg,var(--expense),var(--expense-dark)); }
+  .m-label{ font-size:9.5px; color:var(--ink-soft); margin-top:2px; }
+  table.year-table{ width:100%; border-collapse:collapse; font-size:12px; margin-top:12px; }
+  table.year-table th{ text-align:right; font-size:10.5px; color:var(--ink-soft); padding:6px 4px; border-bottom:1px solid var(--line); }
+  table.year-table th:first-child, table.year-table td:first-child{ text-align:left; }
+  table.year-table td{ padding:6px 4px; border-bottom:1px solid var(--line); }
+  table.year-table td.inc{ color:var(--income-dark); font-weight:600; text-align:right; }
+  table.year-table td.exp{ color:var(--expense-dark); font-weight:600; text-align:right; }
+  table.year-table td.bal{ font-weight:700; text-align:right; }
+  table.year-table tfoot td{ font-weight:800; border-top:2px solid var(--ink); border-bottom:none; }
+  .no-data{ text-align:center; color:#aca6c4; padding:30px 0; font-style:italic; font-size:13px; }
+
+  /* bottom bar + fab */
+  .bottom-bar-wrap{ position:sticky; bottom:0; z-index:45; }
+  .bottom-nav{
+    display:flex; background:rgba(255,255,255,0.92); backdrop-filter:blur(10px);
+    border-top:1px solid var(--line); padding:8px 10px calc(8px + env(safe-area-inset-bottom));
+  }
+  .nav-btn{
+    flex:1; border:none; background:transparent; display:flex; flex-direction:column; align-items:center; gap:3px;
+    padding:5px 0; color:var(--ink-soft); font-size:10.5px; font-weight:600; cursor:pointer;
+  }
+  .nav-btn svg{ width:20px; height:20px; }
+  .nav-btn.active{ color:var(--indigo); }
+  .fab{
+    position:absolute; right:16px; bottom:66px; width:54px; height:54px; border-radius:50%; border:none;
+    background:linear-gradient(135deg,var(--amber),var(--amber-dark)); color:#3a2600; font-size:26px; font-weight:700;
+    box-shadow:0 12px 22px -8px rgba(232,154,12,0.65); cursor:pointer; transition:transform 0.15s ease;
+  }
+  .fab:active{ transform:scale(0.92); }
+
+  /* bottom sheets */
+  .sheet-backdrop{ position:fixed; inset:0; background:rgba(20,15,40,0.4); z-index:60; opacity:0; transition:opacity 0.25s ease; }
+  .sheet-backdrop.hidden{ display:none; }
+  .sheet-backdrop.show{ opacity:1; }
+  .sheet{
+    position:fixed; left:50%; bottom:0; transform:translate(-50%,100%); width:100%; max-width:440px;
+    background:#fff; border-radius:20px 20px 0 0; z-index:61; padding:10px 18px calc(20px + env(safe-area-inset-bottom));
+    transition:transform 0.3s cubic-bezier(.32,.72,0,1); box-shadow:0 -12px 30px -10px rgba(20,15,40,0.3);
+  }
+  .sheet.hidden{ display:none; }
+  .sheet.show{ transform:translate(-50%,0); }
+  .sheet-handle{ width:36px; height:4px; background:var(--line); border-radius:99px; margin:4px auto 14px; }
+  .sheet h3{ font-family:'Baloo Da 2',sans-serif; font-size:15.5px; margin:0 0 12px; }
+  .sheet-toggle{ display:flex; background:var(--bg); border-radius:999px; padding:3px; margin-bottom:12px; }
+  .toggle-btn{ flex:1; border:none; background:transparent; padding:9px 0; border-radius:999px; font-weight:700; font-size:12.5px; color:var(--ink-soft); cursor:pointer; }
+  .toggle-btn.active[data-type="income"]{ background:var(--income); color:#fff; }
+  .toggle-btn.active[data-type="expense"]{ background:var(--expense); color:#fff; }
+  .sheet input{
+    width:100%; font-family:'Hind Siliguri',sans-serif; font-size:14px; padding:11px 13px; margin-bottom:9px;
+    border:1px solid var(--line); border-radius:12px; background:#FAFAFE; color:var(--ink);
+  }
+  .sheet input:focus{ outline:2px solid var(--indigo); outline-offset:1px; }
+  .sheet-submit{
+    width:100%; border:none; border-radius:12px; padding:13px 0; font-weight:700; font-size:14px; color:#fff;
+    background:linear-gradient(135deg,var(--indigo),var(--violet)); cursor:pointer; margin-top:2px;
+  }
+  .export-option{
+    width:100%; border:1px solid var(--line); background:#fff; border-radius:12px; padding:13px 14px;
+    display:flex; align-items:center; justify-content:space-between; font-weight:700; font-size:13.5px; color:var(--ink);
+    margin-bottom:10px; cursor:pointer;
+  }
+  .export-option.xlsx{ border-color:var(--income); color:var(--income-dark); }
+  .export-option.csv{ border-color:var(--indigo); color:var(--indigo); }
+  .export-hint{ font-size:11.5px; color:var(--ink-soft); margin:-4px 0 14px; }
+
+  .status-line{ text-align:center; font-size:10.5px; color:var(--ink-soft); padding:6px 0 4px; opacity:0.8; }
+  .hidden{ display:none !important; }
+</style>
+
+<div class="app-shell">
+  <div class="blobs"><div class="blob b1"></div><div class="blob b2"></div></div>
+
+  <header class="app-bar">
+    <div class="app-bar-top">
+      <div class="brand">
+        <span class="brand-badge">৳</span>
+        <div><h1>হিসাব খাতা</h1><p id="todayLabel"></p></div>
+      </div>
+      <input type="month" id="monthPicker" class="month-picker">
+    </div>
+    <div class="chip-row" id="chipRow"></div>
+  </header>
+
+  <main class="screen" id="screenHome">
+    <section class="hero-card">
+      <div class="hero-label">ব্যালান্স</div>
+      <div class="hero-value" id="heroBalance">৳০</div>
+      <div class="ratio-track"><div class="ratio-fill" id="ratioFill" style="width:50%"></div></div>
+      <div class="hero-sub" id="ratioLabel"></div>
+    </section>
+
+    <section class="quick-stats">
+      <div class="quick-stat income" id="quickIncome">
+        <div class="qs-label"><span class="qs-dot"></span>আয়</div>
+        <div class="qs-value" id="qsIncomeVal">৳০</div>
+      </div>
+      <div class="quick-stat expense" id="quickExpense">
+        <div class="qs-label"><span class="qs-dot"></span>খরচ</div>
+        <div class="qs-value" id="qsExpenseVal">৳০</div>
+      </div>
+    </section>
+
+    <div class="segmented">
+      <button class="seg-btn active" data-seg="income">আয় ইনপুট</button>
+      <button class="seg-btn" data-seg="expense">খরচ ইনপুট</button>
+    </div>
+
+    <div class="entry-list" id="entryList" data-seg="income"></div>
+  </main>
+
+  <main class="screen hidden" id="screenYear">
+    <div class="year-card">
+      <h2>বার্ষিক সারাংশ</h2>
+      <div class="legend"><span><i class="li-inc"></i>আয়</span><span><i class="li-exp"></i>খরচ</span></div>
+      <div class="chart" id="chart"></div>
+      <div id="yearTableWrap"></div>
+    </div>
+  </main>
+
+  <div class="status-line" id="statusLine">লোড হচ্ছে...</div>
+
+  <div class="bottom-bar-wrap">
+    <button class="fab" id="fabAdd" aria-label="নতুন এন্ট্রি যোগ করুন">+</button>
+    <nav class="bottom-nav">
+      <button class="nav-btn active" data-view="home">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M3 11l9-7 9 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 10v9a1 1 0 001 1h4v-6h4v6h4a1 1 0 001-1v-9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        হোম
+      </button>
+      <button class="nav-btn" data-view="year">
+        <svg viewBox="0 0 24 24" fill="none"><rect x="3" y="4" width="18" height="17" rx="2" stroke="currentColor" stroke-width="2"/><path d="M3 9h18M8 3v3M16 3v3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        বার্ষিক
+      </button>
+      <button class="nav-btn" data-view="export">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M12 3v12M12 15l-4-4M12 15l4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        এক্সপোর্ট
+      </button>
+    </nav>
+  </div>
+
+  <div class="sheet-backdrop hidden" id="addBackdrop"></div>
+  <div class="sheet hidden" id="addSheet">
+    <div class="sheet-handle"></div>
+    <h3>নতুন এন্ট্রি</h3>
+    <div class="sheet-toggle">
+      <button class="toggle-btn active" data-type="income">আয়</button>
+      <button class="toggle-btn" data-type="expense">খরচ</button>
+    </div>
+    <input type="date" id="sheetDate">
+    <input type="text" id="sheetDesc" placeholder="বিবরণ">
+    <input type="number" id="sheetAmt" placeholder="পরিমাণ" min="0">
+    <button class="sheet-submit" id="sheetSubmit">যোগ করুন</button>
+  </div>
+
+  <div class="sheet-backdrop hidden" id="exportBackdrop"></div>
+  <div class="sheet hidden" id="exportSheet">
+    <div class="sheet-handle"></div>
+    <h3>ডেটা এক্সপোর্ট করুন</h3>
+    <button class="export-option xlsx" id="exportXlsxBtn">Excel (.xlsx) ডাউনলোড ⭳</button>
+    <button class="export-option csv" id="exportCsvBtn">CSV ডাউনলোড ⭳</button>
+    <p class="export-hint">সব মাসের সব এন্ট্রি একসাথে থাকবে, সারাংশ শিটসহ।</p>
+  </div>
+</div>
+
+<script>
+(function(){
+  const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const banglaMonths = ["জানুয়ারি","ফেব্রুয়ারি","মার্চ","এপ্রিল","মে","জুন","জুলাই","আগস্ট","সেপ্টেম্বর","অক্টোবর","নভেম্বর","ডিসেম্বর"];
+  const banglaMonthsShort = ["জানু","ফেব্রু","মার্চ","এপ্রিল","মে","জুন","জুলাই","আগস্ট","সেপ্টে","অক্টো","নভে","ডিসে"];
+  const enDigits = "0123456789";
+  const bnDigits = "০১২৩৪৫৬৭৮৯";
+  function toBn(n){ return String(n).replace(/[0-9]/g, d => bnDigits[enDigits.indexOf(d)]); }
+  function fmtAmt(n){ if(isNaN(n)) n=0; return '৳' + toBn(Math.round(n)); }
+  function fmtDate(iso){ if(!iso) return ''; const [y,m,d]=iso.split('-'); return toBn(d)+'-'+toBn(m)+'-'+toBn(y.slice(2)); }
+  function monthLabel(key){ const [y,m] = key.split('-'); return banglaMonths[parseInt(m,10)-1] + ' ' + toBn(y); }
+  function monthLabelShort(key){ const [y,m] = key.split('-'); return banglaMonthsShort[parseInt(m,10)-1]; }
+  function keyFromDate(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); }
+
+  const now = new Date();
+  document.getElementById('todayLabel').textContent = 'আজ: ' + fmtDate(now.toISOString().slice(0,10));
+
+  const monthPicker = document.getElementById('monthPicker');
+  const chipRow = document.getElementById('chipRow');
+  monthPicker.value = keyFromDate(now);
+
+  function buildChips(centerKey){
+    const [cy,cm] = centerKey.split('-').map(Number);
+    chipRow.innerHTML = '';
+    for(let offset=-3; offset<=3; offset++){
+      const d = new Date(cy, cm-1+offset, 1);
+      const key = keyFromDate(d);
+      const chip = document.createElement('button');
+      chip.className = 'chip' + (key===monthPicker.value ? ' active' : '');
+      chip.textContent = monthLabelShort(key) + ' ' + toBn(String(d.getFullYear()).slice(2));
+      chip.dataset.key = key;
+      chip.addEventListener('click', ()=>{ monthPicker.value = key; onMonthChange(); });
+      chipRow.appendChild(chip);
+    }
+  }
+  buildChips(monthPicker.value);
+
+  let income = [];
+  let expense = [];
+  let activeSeg = 'income';
+  const statusLine = document.getElementById('statusLine');
+
+  function keysFor(monthKey){ return { inc:'hisab:income:'+monthKey, exp:'hisab:expense:'+monthKey }; }
+  async function safeGet(key){ try{ const r = await window.storage.get(key,false); return r? JSON.parse(r.value): null; } catch(e){ return null; } }
+  async function safeSet(key,value){ try{ await window.storage.set(key, JSON.stringify(value), false); } catch(e){ statusLine.textContent = 'সংরক্ষণ করা যায়নি'; } }
+  async function safeList(prefix){ try{ const r = await window.storage.list(prefix,false); return r? r.keys: []; } catch(e){ return []; } }
+
+  async function loadMonth(monthKey){
+    statusLine.textContent = 'লোড হচ্ছে...';
+    const k = keysFor(monthKey);
+    income = await safeGet(k.inc) || [];
+    expense = await safeGet(k.exp) || [];
+    renderMonth();
+    statusLine.textContent = 'ডেটা আপনার ডিভাইসে সংরক্ষিত হচ্ছে';
+  }
+  async function saveMonth(){
+    const k = keysFor(monthPicker.value);
+    await safeSet(k.inc, income);
+    await safeSet(k.exp, expense);
+  }
+
+  function escapeHtml(str){ const div=document.createElement('div'); div.textContent=str; return div.innerHTML; }
+
+  function animateNumber(el, to){
+    const prev = el.dataset.val ? parseFloat(el.dataset.val) : 0;
+    el.dataset.val = to;
+    if(reducedMotion){ el.textContent = fmtAmt(to); return; }
+    const start = performance.now(); const dur = 450;
+    function step(t){
+      const p = Math.min(1,(t-start)/dur);
+      el.textContent = fmtAmt(prev + (to-prev)*p);
+      if(p<1) requestAnimationFrame(step); else el.textContent = fmtAmt(to);
+    }
+    requestAnimationFrame(step);
+  }
+
+  function renderEntryList(){
+    const list = activeSeg==='income' ? income : expense;
+    const el = document.getElementById('entryList');
+    el.dataset.seg = activeSeg;
+    el.innerHTML = '';
+    if(list.length===0){ el.innerHTML = '<div class="empty-note">কোনো এন্ট্রি নেই</div>'; return; }
+    list.slice().sort((a,b)=>(a.date||'').localeCompare(b.date||'')).forEach(entry=>{
+      const row = document.createElement('div');
+      row.className = 'entry-row';
+      row.innerHTML = `<span class="e-date">${fmtDate(entry.date)}</span>
+        <span class="e-desc">${escapeHtml(entry.desc||'')}</span>
+        <span class="e-amt">${fmtAmt(entry.amount)}</span>
+        <button class="del-btn" data-id="${entry.id}" data-kind="${activeSeg}" aria-label="মুছুন">✕</button>`;
+      el.appendChild(row);
+    });
+  }
+
+  function renderMonth(){
+    const ti = income.reduce((s,e)=>s+Number(e.amount||0),0);
+    const te = expense.reduce((s,e)=>s+Number(e.amount||0),0);
+    animateNumber(document.getElementById('heroBalance'), ti-te);
+    animateNumber(document.getElementById('qsIncomeVal'), ti);
+    animateNumber(document.getElementById('qsExpenseVal'), te);
+    const ratio = (ti+te) > 0 ? Math.round((ti/(ti+te))*100) : 50;
+    document.getElementById('ratioFill').style.width = ratio + '%';
+    document.getElementById('ratioLabel').textContent = 'আয় ' + toBn(ratio) + '% · খরচ ' + toBn(100-ratio) + '%';
+    renderEntryList();
+  }
+
+  function onMonthChange(){
+    buildChips(monthPicker.value);
+    loadMonth(monthPicker.value);
+  }
+  monthPicker.addEventListener('change', onMonthChange);
+
+  document.querySelectorAll('.seg-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      document.querySelectorAll('.seg-btn').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      activeSeg = btn.dataset.seg;
+      renderEntryList();
+    });
+  });
+  document.getElementById('quickIncome').addEventListener('click', ()=>document.querySelector('.seg-btn[data-seg="income"]').click());
+  document.getElementById('quickExpense').addEventListener('click', ()=>document.querySelector('.seg-btn[data-seg="expense"]').click());
+
+  document.body.addEventListener('click', e=>{
+    if(e.target.classList.contains('del-btn')){
+      const kind = e.target.dataset.kind, id = e.target.dataset.id;
+      if(kind==='income') income = income.filter(x=>x.id!==id);
+      else expense = expense.filter(x=>x.id!==id);
+      renderMonth();
+      saveMonth();
+    }
+  });
+
+  // ---- Add entry sheet ----
+  const addBackdrop = document.getElementById('addBackdrop');
+  const addSheet = document.getElementById('addSheet');
+  const sheetDate = document.getElementById('sheetDate');
+  const sheetDesc = document.getElementById('sheetDesc');
+  const sheetAmt = document.getElementById('sheetAmt');
+  let sheetType = 'income';
+
+  function openSheet(backdrop, sheet){
+    backdrop.classList.remove('hidden'); sheet.classList.remove('hidden');
+    requestAnimationFrame(()=>{ backdrop.classList.add('show'); sheet.classList.add('show'); });
+  }
+  function closeSheet(backdrop, sheet){
+    backdrop.classList.remove('show'); sheet.classList.remove('show');
+    setTimeout(()=>{ backdrop.classList.add('hidden'); sheet.classList.add('hidden'); }, 300);
+  }
+
+  document.getElementById('fabAdd').addEventListener('click', ()=>{
+    sheetDate.value = now.toISOString().slice(0,10);
+    sheetDesc.value = ''; sheetAmt.value = '';
+    sheetType = activeSeg;
+    document.querySelectorAll('#addSheet .toggle-btn').forEach(b=>b.classList.toggle('active', b.dataset.type===sheetType));
+    openSheet(addBackdrop, addSheet);
+  });
+  addBackdrop.addEventListener('click', ()=>closeSheet(addBackdrop, addSheet));
+  document.querySelectorAll('#addSheet .toggle-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      sheetType = btn.dataset.type;
+      document.querySelectorAll('#addSheet .toggle-btn').forEach(b=>b.classList.toggle('active', b===btn));
+    });
+  });
+  document.getElementById('sheetSubmit').addEventListener('click', ()=>{
+    const amount = parseFloat(sheetAmt.value);
+    if(!amount || amount<=0){ sheetAmt.focus(); return; }
+    const entry = { id: Date.now()+'-'+Math.random().toString(36).slice(2,7), date: sheetDate.value || now.toISOString().slice(0,10), desc: sheetDesc.value, amount };
+    if(sheetType==='income') income.push(entry); else expense.push(entry);
+    activeSeg = sheetType;
+    document.querySelectorAll('.seg-btn').forEach(b=>b.classList.toggle('active', b.dataset.seg===activeSeg));
+    renderMonth();
+    saveMonth();
+    closeSheet(addBackdrop, addSheet);
+  });
+
+  // ---- Nav: home / year / export ----
+  const screenHome = document.getElementById('screenHome');
+  const screenYear = document.getElementById('screenYear');
+  document.querySelectorAll('.nav-btn').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      const view = btn.dataset.view;
+      if(view === 'export'){ openSheet(exportBackdrop, exportSheet); return; }
+      document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      if(view==='home'){ screenHome.classList.remove('hidden'); screenYear.classList.add('hidden'); }
+      else{ screenYear.classList.remove('hidden'); screenHome.classList.add('hidden'); await renderYear(); }
+    });
+  });
+
+  async function collectAllMonths(){
+    const incKeys = await safeList('hisab:income:');
+    const expKeys = await safeList('hisab:expense:');
+    const monthKeys = new Set();
+    incKeys.forEach(k=>monthKeys.add(k.replace('hisab:income:','')));
+    expKeys.forEach(k=>monthKeys.add(k.replace('hisab:expense:','')));
+    const data = {};
+    for(const mk of monthKeys){
+      data[mk] = { income: await safeGet('hisab:income:'+mk) || [], expense: await safeGet('hisab:expense:'+mk) || [] };
+    }
+    return data;
+  }
+
+  async function renderYear(){
+    statusLine.textContent = 'বার্ষিক হিসাব লোড হচ্ছে...';
+    const data = await collectAllMonths();
+    const keys = Object.keys(data).sort();
+    const chartEl = document.getElementById('chart');
+    const tableWrap = document.getElementById('yearTableWrap');
+    chartEl.innerHTML = '';
+    if(keys.length===0){
+      chartEl.innerHTML = '<div class="no-data">এখনও কোনো মাসের ডেটা নেই</div>';
+      tableWrap.innerHTML = '';
+      statusLine.textContent = 'ডেটা আপনার ডিভাইসে সংরক্ষিত হচ্ছে';
+      return;
+    }
+    let maxVal = 1;
+    const totals = keys.map(k=>{
+      const ti = data[k].income.reduce((s,e)=>s+Number(e.amount||0),0);
+      const te = data[k].expense.reduce((s,e)=>s+Number(e.amount||0),0);
+      maxVal = Math.max(maxVal, ti, te);
+      return { key:k, ti, te };
+    });
+    totals.forEach(t=>{
+      const col = document.createElement('div');
+      col.className = 'chart-col';
+      const hInc = Math.round((t.ti/maxVal)*108);
+      const hExp = Math.round((t.te/maxVal)*108);
+      col.innerHTML = `<div class="bars">
+          <div class="bar inc" style="height:${hInc}px" title="আয়: ${fmtAmt(t.ti)}"></div>
+          <div class="bar exp" style="height:${hExp}px" title="খরচ: ${fmtAmt(t.te)}"></div>
+        </div>
+        <div class="m-label">${monthLabelShort(t.key)}</div>`;
+      chartEl.appendChild(col);
+    });
+    let gi=0, ge=0;
+    const rows = totals.map(t=>{ gi+=t.ti; ge+=t.te;
+      return `<tr><td>${monthLabel(t.key)}</td><td class="inc">${fmtAmt(t.ti)}</td><td class="exp">${fmtAmt(t.te)}</td><td class="bal">${fmtAmt(t.ti-t.te)}</td></tr>`;
+    }).join('');
+    tableWrap.innerHTML = `<table class="year-table">
+      <thead><tr><th>মাস</th><th>আয়</th><th>খরচ</th><th>ব্যালান্স</th></tr></thead>
+      <tbody>${rows}</tbody>
+      <tfoot><tr><td>সর্বমোট</td><td class="inc">${fmtAmt(gi)}</td><td class="exp">${fmtAmt(ge)}</td><td class="bal">${fmtAmt(gi-ge)}</td></tr></tfoot>
+    </table>`;
+    statusLine.textContent = 'ডেটা আপনার ডিভাইসে সংরক্ষিত হচ্ছে';
+  }
+
+  // ---- Export sheet ----
+  const exportBackdrop = document.getElementById('exportBackdrop');
+  const exportSheet = document.getElementById('exportSheet');
+  exportBackdrop.addEventListener('click', ()=>closeSheet(exportBackdrop, exportSheet));
+
+  document.getElementById('exportCsvBtn').addEventListener('click', async ()=>{
+    statusLine.textContent = 'CSV তৈরি হচ্ছে...';
+    const data = await collectAllMonths();
+    const keys = Object.keys(data).sort();
+    let rows = [['ধরন','মাস','তারিখ','বিবরণ','পরিমাণ']];
+    keys.forEach(k=>{
+      data[k].income.forEach(e=> rows.push(['আয়', monthLabel(k), e.date||'', e.desc||'', e.amount||0]));
+      data[k].expense.forEach(e=> rows.push(['খরচ', monthLabel(k), e.date||'', e.desc||'', e.amount||0]));
+    });
+    if(rows.length===1){ statusLine.textContent='এক্সপোর্ট করার মতো ডেটা নেই'; return; }
+    const csv = '\uFEFF' + rows.map(r=>r.map(c=>{ const s=String(c).replace(/"/g,'""'); return /[",\n]/.test(s)?`"${s}"`:s; }).join(',')).join('\n');
+    const blob = new Blob([csv], { type:'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href=url; a.download='hisab-khata.csv';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+    statusLine.textContent = 'CSV ডাউনলোড হয়েছে';
+    closeSheet(exportBackdrop, exportSheet);
+  });
+
+  document.getElementById('exportXlsxBtn').addEventListener('click', async ()=>{
+    statusLine.textContent = 'Excel ফাইল তৈরি হচ্ছে...';
+    if(typeof XLSX === 'undefined'){ statusLine.textContent='Excel লাইব্রেরি লোড হয়নি, আবার চেষ্টা করুন'; return; }
+    const data = await collectAllMonths();
+    const keys = Object.keys(data).sort();
+    if(keys.length===0){ statusLine.textContent='এক্সপোর্ট করার মতো ডেটা নেই'; return; }
+    const summaryRows = [['মাস','আয়','খরচ','ব্যালান্স']];
+    const entryRows = [['ধরন','মাস','তারিখ','বিবরণ','পরিমাণ']];
+    let gi=0, ge=0;
+    keys.forEach(k=>{
+      const ti = data[k].income.reduce((s,e)=>s+Number(e.amount||0),0);
+      const te = data[k].expense.reduce((s,e)=>s+Number(e.amount||0),0);
+      gi+=ti; ge+=te;
+      summaryRows.push([monthLabel(k), ti, te, ti-te]);
+      data[k].income.forEach(e=>entryRows.push(['আয়', monthLabel(k), e.date||'', e.desc||'', e.amount||0]));
+      data[k].expense.forEach(e=>entryRows.push(['খরচ', monthLabel(k), e.date||'', e.desc||'', e.amount||0]));
+    });
+    summaryRows.push(['সর্বমোট', gi, ge, gi-ge]);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(summaryRows), 'সারাংশ');
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(entryRows), 'সব এন্ট্রি');
+    XLSX.writeFile(wb, 'hisab-khata.xlsx');
+    statusLine.textContent = 'Excel ফাইল ডাউনলোড হয়েছে';
+    closeSheet(exportBackdrop, exportSheet);
+  });
+
+  loadMonth(monthPicker.value);
+})();
+</script>
